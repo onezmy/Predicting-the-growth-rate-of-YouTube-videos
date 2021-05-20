@@ -1,0 +1,104 @@
+---
+title: "101C Kaggle HX"
+author: "Hong Xiong"
+date: "12/5/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Get Data
+data <- read.csv("~/Downloads/training-2.csv")
+data$PublishedDate <- factor(data$PublishedDate)
+data1 <- subset(data,select=-c(id,growth_2_6))
+
+## Remove variables with zero variance
+library(caret)
+library(lattice)
+library(ggplot2)
+nzv <- nearZeroVar(data1)
+nzv
+subdata1 <- data1[,-nzv]
+subdata1 <- subset(subdata1,select=-PublishedDate)
+
+## Remove variables with 0.9 + correlation
+
+cor <-  cor(subdata1)
+highlycor <- findCorrelation(cor, cutoff = .9)
+subdata2 <- subdata1[,-highlycor]
+subdata2["growth_2_6"] <- data$growth_2_6
+
+## Check if there is still linear combo
+comboInfo <- findLinearCombos(subdata2)
+comboInfo
+ncol(subdata2)
+head(subdata2)
+
+## Transform last a few columns into factors
+subdata2[,141] <- factor(subdata2[,141])
+subdata2[,142] <- factor(subdata2[,142])
+subdata2[,143] <- factor(subdata2[,143])
+subdata2[,144] <- factor(subdata2[,144])
+subdata2[,145] <- factor(subdata2[,145])
+subdata2[,146] <- factor(subdata2[,146])
+subdata2[,147] <- factor(subdata2[,147])
+subdata2[,148] <- factor(subdata2[,148])
+subdata2[,149] <- factor(subdata2[,149])
+subdata2[,150] <- factor(subdata2[,150])
+subdata2[,151] <- factor(subdata2[,151])
+
+## split train and test data
+set.seed(1)
+trainIndex <- createDataPartition(subdata2$growth_2_6, p= 0.7, list=FALSE) 
+train <- subdata2[trainIndex,]
+test <- subdata2[-trainIndex,]
+
+## rf with 33 predictors from rf$importance
+
+## bagging with all predictors to see importance
+library(randomForest)
+rf <- randomForest(growth_2_6~. ,data=train,mtry=151,importance=TRUE)
+imp <- data.frame(rf$importance)
+
+## Select top 33 predictors with the greatest IncMSE
+pred <- rownames(top_n(imp,33,X.IncMSE))
+
+## write the regresson formula
+var.predict<-paste(pred,collapse="+")
+rf.form <- as.formula(paste("growth_2_6", var.predict, sep = " ~ "))
+
+## train the rf
+oob_train_control <- trainControl(method="oob",
+                                  classProbs = F, 
+                                  savePredictions = TRUE)
+                                  
+rf.33 <- train(rf.form, data=train, ntree=1500,
+                   trControl=oob_train_control)
+
+## test error
+
+prediction <- predict(rf.33,newdata=test)
+tr <- sqrt(mean((prediction-test$growth_2_6)^2))
+tr
+
+
+## export to true test data
+
+test.2 <- read.csv("~/Downloads/test-2.csv")
+test.2$PublishedDate <- factor(test.2$PublishedDate)
+test.2[,248] <- factor(test.2[,248])
+test.2[,249] <- factor(test.2[,249])
+test.2[,250] <- factor(test.2[,250])
+test.2[,251] <- factor(test.2[,251])
+test.2[,252] <- factor(test.2[,252])
+test.2[,253] <- factor(test.2[,253])
+test.2[,254] <- factor(test.2[,254])
+test.2[,255] <- factor(test.2[,255])
+test.2[,256] <- factor(test.2[,256])
+test.2[,257] <- factor(test.2[,257])
+test.2[,258] <- factor(test.2[,258])
+test.2[,259] <- factor(test.2[,259])
+result1 <- predict(rf.33,newdata=test.2)
+fresult1 <- data.frame(id=test.2$id,growth_2_6 = result1)
+write.csv(fresult1,"rf.33",row.names=FALSE)
